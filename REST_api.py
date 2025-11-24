@@ -3,7 +3,6 @@ from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 import os
 import json
-import datetime
 
 load_dotenv()
 
@@ -65,6 +64,36 @@ def db_edit(retrieved_item, db_id):
     dbcursor.close()
     db.close()
 
+def db_delete(db_id):
+    db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
+    dbcursor = db.cursor()
+
+    sql = "DELETE FROM posts WHERE blogId = %s"
+    dbcursor.execute(sql, (db_id,))
+
+    db.commit()
+
+    dbcursor.close()
+    db.close()
+
+def db_exists(db_id):
+    db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
+    dbcursor = db.cursor()
+
+    sql = "SELECT EXISTS(SELECT 1 FROM posts WHERE blogId = %s)"
+    dbcursor.execute(sql, (db_id,))
+
+    entry_exists = dbcursor.fetchone()[0]
+
+    dbcursor.close()
+    db.close()
+
+    if entry_exists:
+        return True
+    else:
+        return False
+
+
 @app.route("/posts", methods=['POST'])
 def create_blog():
     if request.method == 'POST':
@@ -77,26 +106,30 @@ def create_blog():
 
 @app.route("/posts/<int:item_id>", methods=['GET', 'PUT', 'DELETE'])
 def call_blog(item_id):
-    match request.method:
-        case 'GET': #TODO: Add seperate route where terms can be looked up to find all articles based on tags
-            print("GET Request")
-            retrieved_item = db_retrieve(item_id)
-            return jsonify(retrieved_item), 200
-        case 'PUT':
-            print("PUT Request")
-            retrieved_item = db_retrieve(item_id)
-            data = request.get_json()
-            retrieved_item["title"] = data["title"]
-            retrieved_item["content"] = data["content"]
-            retrieved_item["category"] = data["category"]
-            retrieved_item["tags"] = json.dumps(data["tags"])
-            db_edit(retrieved_item, item_id)
-            return "Blog Post edited successfully", 200
-        case 'DELETE': #Add ability to delete an entry from the db based on id
-            print("DELETE Request")
-            print(item_id)
-            return(jsonify(f"DELETED {item_id}"))
-#TODO: Add error handing where error code 404 is returned on invalid id or no location found
+    entry_exists = db_exists(item_id)
+    if entry_exists:
+        match request.method:
+            case 'GET': #TODO: Add seperate route where terms can be looked up to find all articles based on tags
+                print("GET Request")
+                retrieved_item = db_retrieve(item_id)
+                return jsonify(retrieved_item), 200
+            case 'PUT':
+                print("PUT Request")
+                retrieved_item = db_retrieve(item_id)
+                data = request.get_json()
+                retrieved_item["title"] = data["title"]
+                retrieved_item["content"] = data["content"]
+                retrieved_item["category"] = data["category"]
+                retrieved_item["tags"] = json.dumps(data["tags"])
+                db_edit(retrieved_item, item_id)
+                return "Blog Post edited successfully", 200
+            case 'DELETE': #Add ability to delete an entry from the db based on id
+                print("DELETE Request")
+                db_delete(item_id)
+                return 204
+    else:
+        return "Item not found", 404
+
 
 if __name__ == '__main__':
     app.run()
