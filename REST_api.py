@@ -64,6 +64,7 @@ def db_edit(retrieved_item, db_id):
     dbcursor.close()
     db.close()
 
+
 def db_delete(db_id):
     db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
     dbcursor = db.cursor()
@@ -92,15 +93,34 @@ def db_exists(db_id):
         return True
     else:
         return False
+    
+
+def db_tag_search(tags):
+    db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
+    dbcursor = db.cursor(dictionary=True)
+    json_value = json.dumps([tags])
+
+    print(f"this is the str: {json_value}")
+    sql = "SELECT * FROM posts WHERE JSON_CONTAINS(blogTags, %s)"
+    dbcursor.execute(sql, (json_value,))
+
+    results = dbcursor.fetchall()
+
+    return jsonify(results)
 
 
-@app.route("/posts", methods=['POST'])
-def create_blog():
+@app.route("/posts", methods=['POST', 'GET']) #TODO: Add error handling where if formatting is incorrect for dict input, it will spit out proper errors
+def blog():
     if request.method == 'POST':
         data = request.get_json()
         db_insert(data)
         print("POST Request")
         return "Post Created", 201
+    if request.method == 'GET':
+        tags = request.args.get("tags")
+        tagged_results = db_tag_search(tags)
+        return tagged_results
+    
 
 
 
@@ -109,7 +129,7 @@ def call_blog(item_id):
     entry_exists = db_exists(item_id)
     if entry_exists:
         match request.method:
-            case 'GET': #TODO: Add seperate route where terms can be looked up to find all articles based on tags
+            case 'GET':
                 print("GET Request")
                 retrieved_item = db_retrieve(item_id)
                 return jsonify(retrieved_item), 200
@@ -123,12 +143,13 @@ def call_blog(item_id):
                 retrieved_item["tags"] = json.dumps(data["tags"])
                 db_edit(retrieved_item, item_id)
                 return "Blog Post edited successfully", 200
-            case 'DELETE': #Add ability to delete an entry from the db based on id
+            case 'DELETE':
                 print("DELETE Request")
                 db_delete(item_id)
                 return 204
     else:
         return "Item not found", 404
+
 
 
 if __name__ == '__main__':
