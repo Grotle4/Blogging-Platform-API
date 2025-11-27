@@ -9,6 +9,7 @@ load_dotenv()
 password = os.getenv("PASSWORD")
 
 app = Flask(__name__)
+app.json.sort_keys = False
 
 
 test_dict = {
@@ -41,7 +42,7 @@ def db_retrieve(db_id):
         "title": result[1],
         "content": result[2],
         "category": result[3],
-        "tags": result[4],
+        "tags": json.loads(result[4]),
         "timeCreated": result[5].strftime("%Y-%m-%d %H:%M:%S.%f"),
         "timeUpdated": result[6].strftime("%Y-%m-%d %H:%M:%S.%f")
     }
@@ -51,6 +52,19 @@ def db_retrieve(db_id):
     db.close()
     return retrieved_dict
 
+
+def db_retrieve_all():
+    db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
+    dbcursor = db.cursor()
+
+    sql =  "SELECT * FROM posts"
+    dbcursor.execute(sql)
+
+    results = dbcursor.fetchall()
+
+    dbcursor.close()
+    db.close()
+    return results
 
 def db_edit(retrieved_item, db_id):
     db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
@@ -93,11 +107,44 @@ def db_exists(db_id):
         return True
     else:
         return False
+
+
+def validate_dict_formatting(data):
+    required_keys = {"title", "content", "category", "tags"}
+    keys_list = list(required_keys)
+    found_keys = set(data.keys())
+    print(f"found: {found_keys}")
+    unneeded_keys = found_keys - required_keys
+    errors = []
+    
+    for idx in range(len(keys_list)):
+        if keys_list[idx] not in data:
+            error = f"Error: required key: '{keys_list[idx]}' not found in request, please add proper key and try again"
+            errors.append(error)
+
+    if unneeded_keys:
+        error = f"Error: invalid keys found. {unneeded_keys} are not valid keys, remove them and try again."
+        errors.append(error)
+    
+    return errors
+
+def validate_dict_types(data):
+    types = [str, str, str, list]
+    keys = ["title", "content", "category", "tags"]
+    errors = []
+
+    for idx in range(len(keys)):
+        if isinstance(data[keys[idx]], types[idx]):
+            print(f"Proper type match, key '{keys[idx]}' is correctly a {types[idx]}")
+        else:
+            error = (f"Incorrect type match, key '{keys[idx]}' should be type: {types[idx]}")
+            errors.append(error)
+    return errors
     
 
 def db_tag_search(tags):
     db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
-    dbcursor = db.cursor(dictionary=True)
+    dbcursor = db.cursor()
     json_value = json.dumps([tags])
 
     print(f"this is the str: {json_value}")
@@ -105,21 +152,54 @@ def db_tag_search(tags):
     dbcursor.execute(sql, (json_value,))
 
     results = dbcursor.fetchall()
+    print(results)
+    return results
 
-    return jsonify(results)
 
+def create_get_dict(results):
+    result_list = []
+    for result in tuple(results):
+        print(f"result: {result}")
+        print(type(result))
+        results_dict = {
+            "id": result[0],
+            "title": result[1],
+            "content": result[2],
+            "category": result[3],
+            "tags": json.loads(result[4]),
+            "timeCreated": result[5].strftime("%Y-%m-%d %H:%M:%S.%f"),
+            "timeUpdated": result[6].strftime("%Y-%m-%d %H:%M:%S.%f")
+            }
+        result_list.append(results_dict)
+    return result_list
 
-@app.route("/posts", methods=['POST', 'GET']) #TODO: Add error handling where if formatting is incorrect for dict input, it will spit out proper errors
+@app.route("/posts", methods=['POST', 'GET'])
 def blog():
     if request.method == 'POST':
         data = request.get_json()
-        db_insert(data)
-        print("POST Request")
-        return "Post Created", 201
+        format_errors = validate_dict_formatting(data)
+        if not format_errors:
+            type_errors = validate_dict_types(data)
+            if not type_errors:
+                db_insert(data)
+                print("POST Request")
+                return "Post Created", 201
+            else:
+                return type_errors, 400
+        else:
+            return format_errors, 400
+                    
     if request.method == 'GET':
-        tags = request.args.get("tags")
-        tagged_results = db_tag_search(tags)
-        return tagged_results
+        if not request.args:
+            print("no argument given")
+            results = db_retrieve_all()
+            result_list = create_get_dict(results)
+            return jsonify(result_list)
+        else:
+            tags = request.args.get("tags")
+            tagged_results = db_tag_search(tags)
+            result_list = create_get_dict(tagged_results)
+            return jsonify(result_list)
     
 
 
@@ -137,16 +217,24 @@ def call_blog(item_id):
                 print("PUT Request")
                 retrieved_item = db_retrieve(item_id)
                 data = request.get_json()
-                retrieved_item["title"] = data["title"]
-                retrieved_item["content"] = data["content"]
-                retrieved_item["category"] = data["category"]
-                retrieved_item["tags"] = json.dumps(data["tags"])
-                db_edit(retrieved_item, item_id)
-                return "Blog Post edited successfully", 200
+                format_errors = validate_dict_formatting(data)
+                if not format_errors:
+                    type_errors = validate_dict_types(data)
+                    if not type_errors:
+                        retrieved_item["title"] = data["title"]
+                        retrieved_item["content"] = data["content"]
+                        retrieved_item["category"] = data["category"]
+                        retrieved_item["tags"] = json.dumps(data["tags"])
+                        db_edit(retrieved_item, item_id)
+                        return "Blog Post edited successfully", 200
+                    else:
+                        return type_errors, 400
+                else:
+                    return format_errors, 400
             case 'DELETE':
                 print("DELETE Request")
                 db_delete(item_id)
-                return 204
+                return "", 204
     else:
         return "Item not found", 404
 
