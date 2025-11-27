@@ -227,3 +227,8 @@ GET /posts?tags=python
 
 ---
 
+### Inspiration
+
+---
+https://roadmap.sh/projects/blogging-platform-api
+
