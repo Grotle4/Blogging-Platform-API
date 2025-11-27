@@ -11,14 +11,6 @@ password = os.getenv("PASSWORD")
 app = Flask(__name__)
 app.json.sort_keys = False
 
-
-test_dict = {
-    "title" : "this is a test name",
-    "content": "this is test content",
-    "category": "this is the category",
-    "tags": ["tag 1", "tag 2"]
-}
-
 def db_insert(post_dict):
     db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
     dbcursor = db.cursor()
@@ -46,7 +38,6 @@ def db_retrieve(db_id):
         "timeCreated": result[5].strftime("%Y-%m-%d %H:%M:%S.%f"),
         "timeUpdated": result[6].strftime("%Y-%m-%d %H:%M:%S.%f")
     }
-    print(retrieved_dict)
 
     dbcursor.close()
     db.close()
@@ -57,7 +48,7 @@ def db_retrieve_all():
     db = mysql.connector.connect(user='root', password=password, host="localhost", database="bloggingplatformdb")
     dbcursor = db.cursor()
 
-    sql =  "SELECT * FROM posts"
+    sql = "SELECT * FROM posts"
     dbcursor.execute(sql)
 
     results = dbcursor.fetchall()
@@ -113,13 +104,12 @@ def validate_dict_formatting(data):
     required_keys = {"title", "content", "category", "tags"}
     keys_list = list(required_keys)
     found_keys = set(data.keys())
-    print(f"found: {found_keys}")
     unneeded_keys = found_keys - required_keys
     errors = []
     
     for idx in range(len(keys_list)):
         if keys_list[idx] not in data:
-            error = f"Error: required key: '{keys_list[idx]}' not found in request, please add proper key and try again"
+            error = f"Error: required key: '{keys_list[idx]}' not found in request, please add proper key and try again."
             errors.append(error)
 
     if unneeded_keys:
@@ -147,20 +137,16 @@ def db_tag_search(tags):
     dbcursor = db.cursor()
     json_value = json.dumps([tags])
 
-    print(f"this is the str: {json_value}")
     sql = "SELECT * FROM posts WHERE JSON_CONTAINS(blogTags, %s)"
     dbcursor.execute(sql, (json_value,))
 
     results = dbcursor.fetchall()
-    print(results)
     return results
 
 
 def create_get_dict(results):
     result_list = []
     for result in tuple(results):
-        print(f"result: {result}")
-        print(type(result))
         results_dict = {
             "id": result[0],
             "title": result[1],
@@ -182,8 +168,7 @@ def blog():
             type_errors = validate_dict_types(data)
             if not type_errors:
                 db_insert(data)
-                print("POST Request")
-                return "Post Created", 201
+                return "Post Created.", 201
             else:
                 return type_errors, 400
         else:
@@ -191,7 +176,6 @@ def blog():
                     
     if request.method == 'GET':
         if not request.args:
-            print("no argument given")
             results = db_retrieve_all()
             result_list = create_get_dict(results)
             return jsonify(result_list)
@@ -210,11 +194,9 @@ def call_blog(item_id):
     if entry_exists:
         match request.method:
             case 'GET':
-                print("GET Request")
                 retrieved_item = db_retrieve(item_id)
                 return jsonify(retrieved_item), 200
             case 'PUT':
-                print("PUT Request")
                 retrieved_item = db_retrieve(item_id)
                 data = request.get_json()
                 format_errors = validate_dict_formatting(data)
@@ -226,17 +208,16 @@ def call_blog(item_id):
                         retrieved_item["category"] = data["category"]
                         retrieved_item["tags"] = json.dumps(data["tags"])
                         db_edit(retrieved_item, item_id)
-                        return "Blog Post edited successfully", 200
+                        return "Blog Post Edited Successfully.", 200
                     else:
                         return type_errors, 400
                 else:
                     return format_errors, 400
             case 'DELETE':
-                print("DELETE Request")
                 db_delete(item_id)
                 return "", 204
     else:
-        return "Item not found", 404
+        return "Item not found.", 404
 
 
 
