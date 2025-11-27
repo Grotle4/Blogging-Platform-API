@@ -49,7 +49,7 @@ The **Blogging Platform API** provides a simple backend service that allows a cl
 
 ### **1. Clone the Repository**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Grotle4/Blogging-Platform-API.git
 cd <your-project-folder>
 ```
 
